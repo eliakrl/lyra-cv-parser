@@ -1,0 +1,4 @@
+markitdown[all]
+transformers
+torch
+requests
