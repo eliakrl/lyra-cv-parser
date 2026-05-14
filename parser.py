@@ -1,8 +1,12 @@
 import re
 import json
-import requests
+import os
+from openai import OpenAI
+from dotenv import load_dotenv
 from markitdown import MarkItDown
 from transformers import pipeline
+
+load_dotenv()
 
 _ner = None
 
@@ -11,17 +15,22 @@ def _get_ner():
     if _ner is None:
         _ner = pipeline(
             "ner",
-            model="dslim/distilbert-base-NER",
+            model="dslim/bert-base-NER",
             aggregation_strategy="simple",
         )
     return _ner
 
 
 def extract_text(file_path: str) -> str:
-    md = MarkItDown()
-    result = md.convert(file_path)
-    text = result.text_content.strip()
-    if len(text) < 100:
+    if file_path.endswith('.txt'):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            text = f.read().strip()
+    else:
+        md = MarkItDown()
+        result = md.convert(file_path)
+        text = result.text_content.strip()
+    print(f"[debug] extracted {len(text)} chars: {repr(text[:200])}")
+    if len(text) < 20:
         raise ValueError("Extracted text too short — file may be a scanned image. Try OCR.")
     return text
 
@@ -72,19 +81,25 @@ CV:
 {text[:3000]}"""
 
     try:
-        response = requests.post(
-            "http://localhost:11434/api/generate",
-            json={"model": "llama3.2", "prompt": prompt, "stream": False},
-            timeout=60,
+        client = OpenAI(
+            api_key=os.getenv("NEBIUS_API_KEY"),
+            base_url=os.getenv("NEBIUS_BASE_URL", "https://api.studio.nebius.ai/v1"),
         )
-        raw = response.json()["response"]
-        # Extract JSON block if wrapped in markdown
+        response = client.chat.completions.create(
+            model="meta-llama/Meta-Llama-3.1-8B-Instruct",
+            messages=[
+                {"role": "system", "content": "You are a structured CV parser. Your only job is to extract factual information from CV text and return it as valid JSON. Never explain, never add commentary. If a field cannot be determined from the text, return null for strings or [] for arrays. Be conservative — only infer what the text clearly supports."},
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.1,
+        )
+        raw = response.choices[0].message.content
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         if match:
             return json.loads(match.group())
         return json.loads(raw)
     except Exception as e:
-        return {"error": f"Llama unavailable: {e}"}
+        return {"error": f"Nebius unavailable: {e}"}
 
 
 def parse_cv(file_path: str, use_llama: bool = False) -> dict:

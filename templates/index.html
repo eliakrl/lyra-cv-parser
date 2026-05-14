@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lyra — CV Parser</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --cream: #F4F1EB;
+      --ink: #1A1A1A;
+      --ink-soft: #2E2E2E;
+      --ink-muted: rgba(26,26,26,0.5);
+      --ink-faint: rgba(26,26,26,0.12);
+      --glass-bg: rgba(255,255,255,0.6);
+      --glass-border: rgba(255,255,255,0.8);
+      --glass-shadow: 0 4px 32px rgba(26,26,26,0.08), 0 1px 4px rgba(26,26,26,0.04);
+      --peach: #E8B89C;
+      --lilac: #B8B5D8;
+      --sky: #9FB6D4;
+      --pink: #E4B8C9;
+      --radius-card: 28px;
+      --radius-pill: 999px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--cream);
+      color: var(--ink);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 64px 16px 80px;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Grain texture */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.5;
+    }
+
+    /* Background orbs */
+    .orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px) saturate(120%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .orb-1 {
+      width: 500px; height: 500px;
+      background: radial-gradient(circle at 30% 30%, var(--peach) 0%, var(--pink) 60%, transparent 85%);
+      top: -150px; right: -100px;
+      opacity: 0.45;
+    }
+    .orb-2 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle at 70% 30%, var(--lilac) 0%, var(--sky) 60%, transparent 85%);
+      bottom: -100px; left: -80px;
+      opacity: 0.4;
+    }
+
+    /* Content above orbs */
+    header, main { position: relative; z-index: 1; }
+
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .wordmark {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-bottom: 20px;
+    }
+
+    header h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(2.4rem, 6vw, 4rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: var(--ink);
+    }
+
+    header p {
+      margin-top: 12px;
+      font-size: 0.9rem;
+      color: var(--ink-muted);
+      letter-spacing: 0.01em;
+      font-weight: 400;
+    }
+
+    /* Glass card */
+    .card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--glass-shadow);
+      padding: 36px;
+      width: 100%;
+      max-width: 600px;
+    }
+
+    /* Drop zone */
+    #drop-zone {
+      border: 1.5px dashed var(--ink-faint);
+      border-radius: 18px;
+      padding: 52px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 200ms ease, background 200ms ease;
+    }
+
+    #drop-zone:hover,
+    #drop-zone.dragover {
+      border-color: rgba(26,26,26,0.3);
+      background: rgba(255,255,255,0.4);
+    }
+
+    #drop-zone svg {
+      width: 36px;
+      height: 36px;
+      stroke: var(--ink-muted);
+      margin-bottom: 14px;
+    }
+
+    #drop-zone p {
+      font-size: 0.9rem;
+      color: var(--ink-muted);
+      line-height: 1.6;
+    }
+
+    #drop-zone strong {
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    #file-input { display: none; }
+
+    #file-name {
+      margin-top: 14px;
+      font-size: 0.82rem;
+      color: var(--ink-muted);
+      letter-spacing: 0.01em;
+      min-height: 18px;
+      text-align: center;
+    }
+
+    /* Button */
+    .btn {
+      display: block;
+      width: 100%;
+      margin-top: 20px;
+      padding: 15px;
+      background: var(--ink);
+      color: var(--cream);
+      border: none;
+      border-radius: var(--radius-pill);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.875rem;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: background 200ms ease;
+    }
+
+    .btn:hover:not(:disabled) { background: var(--ink-soft); }
+    .btn:disabled { background: rgba(26,26,26,0.2); cursor: not-allowed; color: var(--ink-muted); }
+
+    /* Loading */
+    #loading {
+      display: none;
+      text-align: center;
+      padding: 40px 0;
+    }
+
+    .spinner {
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--ink-faint);
+      border-top-color: var(--ink);
+      border-radius: 50%;
+      animation: spin 700ms linear infinite;
+      margin: 0 auto 18px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    #loading p {
+      font-size: 0.85rem;
+      color: var(--ink-muted);
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    /* Results */
+    #results {
+      display: none;
+      margin-top: 32px;
+    }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--ink-faint);
+    }
+
+    .results-header h2 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.4rem;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: var(--ink);
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    @media (max-width: 480px) {
+      .result-grid { grid-template-columns: 1fr; }
+    }
+
+    .result-item {
+      background: rgba(255,255,255,0.5);
+      border: 1px solid var(--glass-border);
+      border-radius: 14px;
+      padding: 14px 16px;
+    }
+
+    .result-item.full-width { grid-column: 1 / -1; }
+
+    .result-label {
+      font-size: 0.7rem;
+      font-weight: 500;
+      color: var(--ink-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      margin-bottom: 8px;
+    }
+
+    .result-value {
+      font-size: 0.925rem;
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag {
+      background: var(--ink);
+      color: var(--cream);
+      font-size: 0.75rem;
+      font-weight: 400;
+      padding: 4px 12px;
+      border-radius: var(--radius-pill);
+      letter-spacing: 0.02em;
+    }
+
+    .tag.soft {
+      background: transparent;
+      border: 1px solid rgba(26,26,26,0.2);
+      color: var(--ink);
+    }
+
+    .tag.gap {
+      background: transparent;
+      border: 1px solid rgba(26,26,26,0.15);
+      color: var(--ink-muted);
+    }
+
+    .badge-seniority {
+      display: inline-block;
+      background: var(--ink);
+      color: var(--cream);
+      font-size: 0.8rem;
+      font-weight: 500;
+      padding: 5px 16px;
+      border-radius: var(--radius-pill);
+      letter-spacing: 0.06em;
+      text-transform: capitalize;
+    }
+
+    /* Error */
+    #error-msg {
+      display: none;
+      margin-top: 14px;
+      padding: 12px 16px;
+      background: rgba(26,26,26,0.05);
+      border: 1px solid rgba(26,26,26,0.12);
+      border-radius: 12px;
+      font-size: 0.85rem;
+      color: var(--ink);
+    }
+
+    .reset-btn {
+      margin-top: 20px;
+      background: none;
+      border: 1px solid var(--ink-faint);
+      color: var(--ink-muted);
+      padding: 11px 20px;
+      border-radius: var(--radius-pill);
+      font-family: 'Inter', sans-serif;
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color 200ms ease, color 200ms ease;
+      width: 100%;
+    }
+
+    .reset-btn:hover {
+      border-color: rgba(26,26,26,0.3);
+      color: var(--ink);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .spinner { animation: none; }
+      *, *::before, *::after { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="orb orb-1" aria-hidden="true"></div>
+  <div class="orb orb-2" aria-hidden="true"></div>
+
+  <header>
+    <div class="wordmark">Lyra</div>
+    <h1>CV Intelligence</h1>
+    <p>Upload a CV to extract a structured candidate profile</p>
+  </header>
+
+  <main>
+    <div class="card">
+
+      <div id="upload-section">
+        <div id="drop-zone" role="button" tabindex="0" aria-label="Drop your CV here or click to browse">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.2" stroke="currentColor" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+          </svg>
+          <p><strong>Drop your CV here</strong><br />or click to browse — PDF or DOCX</p>
+        </div>
+        <input type="file" id="file-input" accept=".pdf,.docx,.txt" aria-label="Select CV file" />
+        <div id="file-name" aria-live="polite"></div>
+        <div id="error-msg" role="alert"></div>
+        <button class="btn" id="analyze-btn" disabled>Analyze CV</button>
+      </div>
+
+      <div id="loading" aria-live="polite" aria-label="Analyzing CV">
+        <div class="spinner"></div>
+        <p>Analyzing</p>
+      </div>
+
+      <div id="results" aria-live="polite">
+        <div class="results-header">
+          <h2>Extracted Profile</h2>
+        </div>
+        <div class="result-grid" id="result-grid"></div>
+        <button class="reset-btn" id="reset-btn">Analyze another CV</button>
+      </div>
+
+    </div>
+  </main>
+
+  <script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileNameEl = document.getElementById('file-name');
+    const analyzeBtn = document.getElementById('analyze-btn');
+    const uploadSection = document.getElementById('upload-section');
+    const loadingEl = document.getElementById('loading');
+    const resultsEl = document.getElementById('results');
+    const resultGrid = document.getElementById('result-grid');
+    const errorMsg = document.getElementById('error-msg');
+    const resetBtn = document.getElementById('reset-btn');
+
+    let selectedFile = null;
+
+    dropZone.addEventListener('click', () => fileInput.click());
+    dropZone.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') fileInput.click(); });
+    dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    dropZone.addEventListener('drop', e => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) setFile(file);
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) setFile(fileInput.files[0]);
+    });
+
+    function setFile(file) {
+      const allowed = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (!allowed.includes(file.type) && !file.name.match(/\.(pdf|docx)$/i)) {
+        showError('Only PDF or DOCX files are supported.');
+        return;
+      }
+      hideError();
+      selectedFile = file;
+      fileNameEl.textContent = file.name;
+      analyzeBtn.disabled = false;
+    }
+
+    analyzeBtn.addEventListener('click', async () => {
+      if (!selectedFile) return;
+      uploadSection.style.display = 'none';
+      loadingEl.style.display = 'block';
+      resultsEl.style.display = 'none';
+
+      const formData = new FormData();
+      formData.append('cv', selectedFile);
+
+      try {
+        const res = await fetch('/analyze', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Analysis failed');
+        renderResults(data);
+      } catch (err) {
+        loadingEl.style.display = 'none';
+        uploadSection.style.display = 'block';
+        showError(err.message);
+      }
+    });
+
+    resetBtn.addEventListener('click', () => {
+      selectedFile = null;
+      fileInput.value = '';
+      fileNameEl.textContent = '';
+      analyzeBtn.disabled = true;
+      hideError();
+      resultsEl.style.display = 'none';
+      uploadSection.style.display = 'block';
+    });
+
+    function renderResults(data) {
+      loadingEl.style.display = 'none';
+      resultGrid.innerHTML = '';
+
+      const soft = data.soft_inference || {};
+
+      addItem('Seniority', soft.seniority
+        ? `<span class="badge-seniority">${soft.seniority}</span>`
+        : null, false, true);
+
+      addItem('Experience',
+        data.years_experience != null ? `${data.years_experience} years` : null);
+
+      addTagItem('Organizations', data.organizations, 'dark');
+      addTagItem('Languages', soft.languages || [], 'soft');
+
+      addItem('Employment Dates', data.date_spans && data.date_spans.length
+        ? data.date_spans.join(' · ')
+        : null, true);
+
+      addTagItem('Transferable Skills', soft.transferable_skills || [], 'soft');
+      addTagItem('Career Gaps', soft.career_gaps || [], 'gap');
+
+      resultsEl.style.display = 'block';
+    }
+
+    function addItem(label, value, fullWidth = false, isHTML = false) {
+      const el = document.createElement('div');
+      el.className = 'result-item' + (fullWidth ? ' full-width' : '');
+      el.innerHTML = `<div class="result-label">${label}</div>
+        <div class="result-value">${isHTML ? (value || '—') : escapeHTML(value || '—')}</div>`;
+      resultGrid.appendChild(el);
+    }
+
+    function addTagItem(label, items, style = 'dark') {
+      const el = document.createElement('div');
+      el.className = 'result-item' + (items && items.length > 3 ? ' full-width' : '');
+      const tags = items && items.length
+        ? items.map(t => `<span class="tag ${style}">${escapeHTML(t)}</span>`).join('')
+        : `<span style="font-size:0.85rem;color:var(--ink-muted)">None detected</span>`;
+      el.innerHTML = `<div class="result-label">${label}</div><div class="tag-list">${tags}</div>`;
+      resultGrid.appendChild(el);
+    }
+
+    function showError(msg) {
+      errorMsg.textContent = msg;
+      errorMsg.style.display = 'block';
+    }
+
+    function hideError() {
+      errorMsg.style.display = 'none';
+      errorMsg.textContent = '';
+    }
+
+    function escapeHTML(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+  </script>
+</body>
+</html>

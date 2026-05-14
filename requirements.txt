@@ -1,4 +1,6 @@
 markitdown[all]
 transformers
 torch
-requests
+openai
+python-dotenv
+flask
