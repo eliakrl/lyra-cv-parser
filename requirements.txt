@@ -1,7 +1,9 @@
 markitdown[all]
 transformers
-torch
 openai
 python-dotenv
 flask
 gunicorn
+pytesseract
+pdf2image
+Pillow

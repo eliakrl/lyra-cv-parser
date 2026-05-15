@@ -30,7 +30,10 @@ def analyze():
         tmp_path = tmp.name
 
     try:
-        result = parse_cv(tmp_path, use_llama=True)
+        mode = request.form.get('mode', 'hybrid')
+        if mode not in ('hybrid', 'llama'):
+            mode = 'hybrid'
+        result = parse_cv(tmp_path, mode=mode)
         return jsonify(result)
     except ValueError as e:
         return jsonify({'error': str(e)}), 422
