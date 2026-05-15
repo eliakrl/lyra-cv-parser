@@ -60,20 +60,6 @@ python app.py
 
 Open `http://localhost:5000`.
 
----
-
-## Deployment
-
-The app is containerized with Docker. The Dockerfile installs `tesseract-ocr` and `poppler-utils` as system dependencies, uses CPU-only PyTorch, and pre-downloads the NER model at build time.
-
-```bash
-docker build -t lyra-cv-parser .
-docker run -p 8080:8080 --env-file .env lyra-cv-parser
-```
-
-For DigitalOcean App Platform: connect the GitHub repo, set `NEBIUS_API_KEY` and `NEBIUS_BASE_URL` as environment variables in the dashboard, and the platform will build from the Dockerfile automatically.
-
----
 
 ## Architecture
 
