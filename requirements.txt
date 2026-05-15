@@ -4,3 +4,4 @@ torch
 openai
 python-dotenv
 flask
+gunicorn
